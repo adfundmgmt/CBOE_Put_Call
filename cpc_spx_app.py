@@ -27,20 +27,25 @@ spx = yf.download("^GSPC", start=start, end=end, progress=False)["Close"].dropna
 # ── Fallback to FRED if Yahoo is empty ─────────────────────────────
 if cpc.empty:
     st.info("Yahoo ^CPC empty — downloading daily PUTCALL series from FRED.")
-    fred_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PUTCALL"
 
-    # add a User-Agent so FRED doesn't 403 us
-    import urllib.request, io
-    req = urllib.request.Request(
-        fred_url,
-        headers={"User-Agent": "Mozilla/5.0"}
+    fred_url = (
+        "https://fred.stlouisfed.org/series/PUTCALL/downloaddata/PUTCALL.csv"
     )
-    with urllib.request.urlopen(req) as resp:
-        raw_csv = resp.read()
 
-    fred = pd.read_csv(io.BytesIO(raw_csv),
-                       parse_dates=["DATE"], index_col="DATE")["PUTCALL"]
-    cpc = fred.loc[start:end].dropna()
+    try:
+        fred = pd.read_csv(
+            fred_url,
+            skiprows=range(1, 12),      # first 11 rows are metadata comments
+            parse_dates=["DATE"],
+            index_col="DATE",
+        )["VALUE"].astype("float")
+        fred.name = "Close"
+        cpc = fred.loc[start:end].dropna()
+
+    except Exception as err:
+        st.error(f"FRED download failed ({err}). No CPC data available.")
+        st.stop()
+
 
 # ── Resample to weekly if selected ─────────────────────────────────────────
 if period == "Weekly":

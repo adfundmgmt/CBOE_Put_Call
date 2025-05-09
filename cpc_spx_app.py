@@ -7,6 +7,8 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import streamlit as st
 import yfinance as yf
+import os
+NDL_KEY = os.getenv("NDL_API_KEY", "")   # set in Streamlit Cloud secrets or local env
 
 st.set_page_config(page_title="Simple CPC vs SPX", layout="wide")
 st.title("CBOE Total Put/Call Ratio ($CPC) vs S&P-500 ($SPX)")
@@ -24,41 +26,28 @@ start = end - dt.timedelta(days=365 * years_back + 30)   # pad 1 mth for SMA
 cpc = yf.download("^CPC", start=start, end=end, progress=False)["Close"].dropna()
 spx = yf.download("^GSPC", start=start, end=end, progress=False)["Close"].dropna()
 
-# ── Fallbacks if Yahoo ^CPC is empty ──────────────────────────────────────
+# ── Fallback to Nasdaq Data Link (Quandl) if Yahoo is empty ─────────────
 if cpc.empty:
-    import io, urllib.request
+    st.info("Yahoo ^CPC empty — pulling CBOE/PCRATIO from Nasdaq Data Link …")
 
-    # 1️  Try Stooq
+    base_url = "https://data.nasdaq.com/api/v3/datasets/CBOE/PCRATIO.csv"
+    params = f"?start_date={start:%Y-%m-%d}&end_date={end:%Y-%m-%d}"
+    if NDL_KEY:
+        params += f"&api_key={NDL_KEY}"
+
     try:
-        st.info("Yahoo empty — trying Stooq for ^CPC …")
-        stooq_url = "https://stooq.com/q/d/l/?s=%5Ecpc&i=d"
-        stooq_csv = urllib.request.urlopen(stooq_url).read()
-        df = pd.read_csv(io.BytesIO(stooq_csv), parse_dates=["Date"], index_col="Date")
-        cpc = df["Close"].astype("float").loc[start:end].dropna()
-
+        ndl_url = base_url + params
+        cpc = (
+            pd.read_csv(ndl_url, parse_dates=["Date"], index_col="Date")["Value"]
+            .astype("float")
+            .rename("Close")
+            .loc[start:end]
+            .dropna()
+        )
     except Exception as err:
-        st.warning(f"Stooq failed ({err}); trying FRED …")
+        st.error(f"Nasdaq Data Link download failed ({err}). No CPC data available.")
+        st.stop()
 
-        # 2️  Try FRED
-        try:
-            fred_url = "https://fred.stlouisfed.org/graph/download-data/PUTCALL"
-            resp = urllib.request.urlopen(fred_url).read()
-            fred = (
-                pd.read_csv(
-                    io.BytesIO(resp),
-                    comment="#",
-                    parse_dates=["DATE"],
-                    index_col="DATE",
-                )["PUTCALL"]
-                .astype("float")
-                .loc[start:end]
-                .dropna()
-            )
-            cpc = fred
-
-        except Exception as err2:
-            st.error(f"FRED failed ({err2}). No CPC data available.")
-            st.stop()
 
 # ── Resample to weekly if selected ─────────────────────────────────────────
 if period == "Weekly":

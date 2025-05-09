@@ -26,8 +26,12 @@ if period == "Weekly":
     spx = spx.resample("W-FRI").last().dropna()
 
 if cpc.empty:
-    st.error("Yahoo Finance returned no data for ^CPC. Try a different date range.")
-    st.stop()
+    import pandas_datareader.data as web
+
+    st.info("Yahoo ^CPC returned no data — pulling from FRED instead.")
+    fred = web.DataReader("PUTCALL", "fred", start, end)["PUTCALL"].dropna()
+    fred.name = "Close"
+    cpc = fred
 
 # ── Plot ───────────────────────────────────────────────────────────────────
 fig, (ax1, ax2) = plt.subplots(

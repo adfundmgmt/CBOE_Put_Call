@@ -1,9 +1,3 @@
-#!/usr/bin/env python3
-"""
-Streamlit CPC vs. SPX Dashboard
--------------------------------
-Interactive chart that mirrors a StockCharts-style view:
-
   • Top panel: CBOE Total Put/Call Ratio ($CPC)
     – optional simple moving average
     – horizontal lines at 0.80 and 0.95

@@ -1,1 +1,5 @@
-streamlit>=1.34 matplotlib>=3.8 pandas>=2.2 yfinance>=0.2 pandas_datareader>=0.10
+streamlit>=1.34 
+matplotlib>=3.8 
+pandas>=2.2 
+yfinance>=0.2 
+pandas_datareader>=0.10

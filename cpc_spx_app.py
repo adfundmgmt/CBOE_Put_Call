@@ -24,28 +24,41 @@ start = end - dt.timedelta(days=365 * years_back + 30)   # pad 1 mth for SMA
 cpc = yf.download("^CPC", start=start, end=end, progress=False)["Close"].dropna()
 spx = yf.download("^GSPC", start=start, end=end, progress=False)["Close"].dropna()
 
-# ── Fallback to FRED if Yahoo is empty ─────────────────────────────
+# ── Fallbacks if Yahoo ^CPC is empty ──────────────────────────────────────
 if cpc.empty:
-    st.info("Yahoo ^CPC empty — downloading daily PUTCALL series from FRED.")
+    import io, urllib.request
 
-    fred_url = (
-        "https://fred.stlouisfed.org/series/PUTCALL/downloaddata/PUTCALL.csv"
-    )
-
+    # 1️  Try Stooq
     try:
-        fred = pd.read_csv(
-            fred_url,
-            skiprows=range(1, 12),      # first 11 rows are metadata comments
-            parse_dates=["DATE"],
-            index_col="DATE",
-        )["VALUE"].astype("float")
-        fred.name = "Close"
-        cpc = fred.loc[start:end].dropna()
+        st.info("Yahoo empty — trying Stooq for ^CPC …")
+        stooq_url = "https://stooq.com/q/d/l/?s=%5Ecpc&i=d"
+        stooq_csv = urllib.request.urlopen(stooq_url).read()
+        df = pd.read_csv(io.BytesIO(stooq_csv), parse_dates=["Date"], index_col="Date")
+        cpc = df["Close"].astype("float").loc[start:end].dropna()
 
     except Exception as err:
-        st.error(f"FRED download failed ({err}). No CPC data available.")
-        st.stop()
+        st.warning(f"Stooq failed ({err}); trying FRED …")
 
+        # 2️  Try FRED
+        try:
+            fred_url = "https://fred.stlouisfed.org/graph/download-data/PUTCALL"
+            resp = urllib.request.urlopen(fred_url).read()
+            fred = (
+                pd.read_csv(
+                    io.BytesIO(resp),
+                    comment="#",
+                    parse_dates=["DATE"],
+                    index_col="DATE",
+                )["PUTCALL"]
+                .astype("float")
+                .loc[start:end]
+                .dropna()
+            )
+            cpc = fred
+
+        except Exception as err2:
+            st.error(f"FRED failed ({err2}). No CPC data available.")
+            st.stop()
 
 # ── Resample to weekly if selected ─────────────────────────────────────────
 if period == "Weekly":

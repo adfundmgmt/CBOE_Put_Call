@@ -24,16 +24,23 @@ start = end - dt.timedelta(days=365 * years_back + 30)   # pad 1 mth for SMA
 cpc = yf.download("^CPC", start=start, end=end, progress=False)["Close"].dropna()
 spx = yf.download("^GSPC", start=start, end=end, progress=False)["Close"].dropna()
 
-# ── If Yahoo returns nothing, fetch CPC directly from FRED CSV ─────────────
+# ── Fallback to FRED if Yahoo is empty ─────────────────────────────
 if cpc.empty:
-    fred_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PUTCALL"
     st.info("Yahoo ^CPC empty — downloading daily PUTCALL series from FRED.")
-    with urllib.request.urlopen(fred_url) as resp:
+    fred_url = "https://fred.stlouisfed.org/graph/fredgraph.csv?id=PUTCALL"
+
+    # add a User-Agent so FRED doesn't 403 us
+    import urllib.request, io
+    req = urllib.request.Request(
+        fred_url,
+        headers={"User-Agent": "Mozilla/5.0"}
+    )
+    with urllib.request.urlopen(req) as resp:
         raw_csv = resp.read()
-    fred = pd.read_csv(io.BytesIO(raw_csv), parse_dates=["DATE"], index_col="DATE")
-    fred = fred["PUTCALL"].loc[start:end].dropna()
-    fred.name = "Close"
-    cpc = fred
+
+    fred = pd.read_csv(io.BytesIO(raw_csv),
+                       parse_dates=["DATE"], index_col="DATE")["PUTCALL"]
+    cpc = fred.loc[start:end].dropna()
 
 # ── Resample to weekly if selected ─────────────────────────────────────────
 if period == "Weekly":

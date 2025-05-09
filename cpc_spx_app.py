@@ -1,3 +1,6 @@
+"""
+Streamlit CPC vs. SPX Dashboard
+-------------------------------
   • Top panel: CBOE Total Put/Call Ratio ($CPC)
     – optional simple moving average
     – horizontal lines at 0.80 and 0.95
